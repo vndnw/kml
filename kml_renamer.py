@@ -628,21 +628,30 @@ class KMLRenamerApp:
 
             for i, pm in enumerate(placemarks):
                 name_tag = pm.find("kml:name", ns)
-                if name_tag is not None and (
+                is_untitled = name_tag is not None and (
                     name_tag.text == "Untitled Polygon"
                     or name_tag.text is None
                     or name_tag.text.strip() == ""
-                ):
+                )
+
+                if is_untitled:
                     count += 1
                     new_name = f"{prefix}{count}"
                     old = name_tag.text or "(không tên)"
                     name_tag.text = new_name
                     self._log(f"  ✏️  {old}  →  {new_name}")
-                    if do_export:
-                        self._export_single(pm, new_name, export_dir)
-                        exported += 1
+                    target_export_name = new_name
                 else:
                     skipped += 1
+                    target_export_name = name_tag.text.strip() if (name_tag is not None and name_tag.text) else f"Polygon_{i+1}"
+
+                if do_export:
+                    # Sanitize filename for individual export
+                    safe_name = "".join(c for c in target_export_name if c not in r'/\:*?"<>|').strip()
+                    if not safe_name:
+                        safe_name = f"Polygon_{i+1}"
+                    self._export_single(pm, safe_name, export_dir)
+                    exported += 1
 
                 if total > 0:
                     pct = ((i + 1) / total) * 100
@@ -652,25 +661,23 @@ class KMLRenamerApp:
             tree.write(output_file, encoding="utf-8", xml_declaration=True)
 
             self._log("━" * 44, "accent")
-            self._log(f"✅  Hoàn tất! Đổi tên {count} polygon", "success")
-            self._log(f"   Bỏ qua: {skipped}  •  File: {os.path.basename(output_file)}")
+            self._log(f"✅  Hoàn tất! Đổi tên {count} polygon (Bỏ qua: {skipped} đã có tên)", "success")
+            self._log(f"   File tổng hợp: {os.path.basename(output_file)}")
             if do_export and exported:
-                self._log(f"   📤 Xuất {exported} file → {os.path.basename(export_dir)}/", "success")
+                self._log(f"   📤 Đã xuất tất cả {exported} file KML riêng lẻ → {os.path.basename(export_dir)}/", "success")
 
             self._set_progress(100)
             self._set_status(f"✅ Hoàn tất — {count} đổi tên" +
                              (f", {exported} file xuất" if exported else ""))
 
-            if count > 0:
-                msg = (f"Đã đổi tên {count} polygon\n"
-                       f"{prefix}1 → {prefix}{count}\n\n"
-                       f"File: {output_file}")
+            if count > 0 or exported > 0:
+                msg = f"Đã đổi tên {count} polygon ('Untitled Polygon' → {prefix}1...)\n\nFile tổng hợp: {output_file}"
                 if exported:
-                    msg += f"\n\nĐã xuất {exported} file KML outline\nvào: {export_dir}"
+                    msg += f"\n\nĐã xuất tất cả {exported} file KML riêng lẻ (Outline)\nvào: {export_dir}"
                 messagebox.showinfo("Thành công", msg)
             else:
                 messagebox.showinfo("Thông báo",
-                                    "Không tìm thấy polygon 'Untitled Polygon' nào.")
+                                    "Không tìm thấy polygon nào để xử lý.")
         except Exception as e:
             self._log(f"❌  Lỗi: {e}", "error")
             self._set_status("❌ Lỗi xử lý")
