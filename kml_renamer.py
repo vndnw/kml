@@ -431,8 +431,8 @@ class KMLRenamerApp:
         info_card = tk.Frame(parent, bg=C["bg_card"], padx=20, pady=12)
         info_card.pack(fill="x", pady=(8, 8))
         tk.Label(info_card,
-                 text="🧹  Tính năng này tự động loại bỏ tất cả các thư mục trung gian 'Entity Features' do Civil3D/AutoCAD tạo ra,\n"
-                      "đưa toàn bộ polygon/feature ra trực tiếp ngoài thư mục chính để tạo file KML sạch.",
+                 text="🧹  Tính năng này tự động xóa sạch tận gốc toàn bộ thư mục 'Entity Features' cùng tất cả phần tử con bên trong\n"
+                      "do Civil3D/AutoCAD tạo ra, giúp giải phóng dung lượng và tạo file KML chuẩn tối giản.",
                  bg=C["bg_card"], fg=C["text_dim"], font=(FONT, 9), justify="left", anchor="w").pack(fill="x")
 
         # Inputs Card
@@ -909,9 +909,6 @@ class KMLRenamerApp:
                         folders_to_remove.append(child)
 
             for ef_folder in folders_to_remove:
-                for item in list(ef_folder):
-                    if not (item.tag == f"{{{KML_NS}}}name" or item.tag.endswith("name")):
-                        parent.append(item)
                 parent.remove(ef_folder)
                 removed_count += 1
         return removed_count
