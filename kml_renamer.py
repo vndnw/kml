@@ -134,12 +134,13 @@ class KMLRenamerApp:
         self.root.minsize(960, 680)
 
         # State
-        self.input_path     = tk.StringVar()
-        self.output_path    = tk.StringVar()
-        self.prefix_var     = tk.StringVar()
-        self.folder_var     = tk.StringVar()
-        self.export_enabled = tk.BooleanVar(value=False)
-        self.export_dir_var = tk.StringVar()
+        self.input_path            = tk.StringVar()
+        self.output_path           = tk.StringVar()
+        self.prefix_var            = tk.StringVar()
+        self.folder_var            = tk.StringVar()
+        self.export_enabled        = tk.BooleanVar(value=False)
+        self.export_dir_var        = tk.StringVar()
+        self.strip_entity_features = tk.BooleanVar(value=True)
         self.folder_list: list[str] = []
         self._log_count = 0
         self._current_step = 0
@@ -366,8 +367,20 @@ class KMLRenamerApp:
         # Expandable options
         self.export_frame = tk.Frame(card, bg=C["bg_card"])
 
+        # Checkbox: Strip Entity Features
+        strip_row = tk.Frame(self.export_frame, bg=C["bg_card"])
+        strip_row.pack(fill="x", pady=(8, 0))
+
+        cb = tk.Checkbutton(
+            strip_row, text="Loại bỏ thư mục trung gian 'Entity Features' (Tạo KML sạch)",
+            variable=self.strip_entity_features, bg=C["bg_card"], fg=C["text"],
+            selectcolor=C["bg_input"], activebackground=C["bg_card"],
+            activeforeground=C["text"], font=(FONT, 9)
+        )
+        cb.pack(anchor="w")
+
         exp_row = tk.Frame(self.export_frame, bg=C["bg_card"])
-        exp_row.pack(fill="x", pady=(10, 0))
+        exp_row.pack(fill="x", pady=(6, 0))
         exp_row.columnconfigure(1, weight=1)
 
         tk.Label(exp_row, text="Thư mục xuất", bg=C["bg_card"], fg=C["text_dim"],
@@ -607,6 +620,11 @@ class KMLRenamerApp:
                 os.makedirs(export_dir, exist_ok=True)
                 self._log(f"📤  Xuất file riêng → {export_dir}", "success")
 
+            if self.strip_entity_features.get():
+                removed_ef = self._remove_entity_features(root, ns)
+                if removed_ef > 0:
+                    self._log(f"🧹 Đã loại bỏ {removed_ef} thư mục trung gian 'Entity Features'", "info")
+
             search_root = root
             if target_name and target_name != "(Toàn bộ file)":
                 for folder in root.findall(".//kml:Folder", ns):
@@ -713,6 +731,28 @@ class KMLRenamerApp:
         ET.ElementTree(new_root).write(
             os.path.join(output_dir, f"{name}.kml"),
             encoding="utf-8", xml_declaration=True)
+
+    def _remove_entity_features(self, root_elem, ns: dict):
+        """
+        Removes any <Folder> elements named 'Entity Features' (case insensitive).
+        Moves all children of 'Entity Features' directly up to the parent folder.
+        """
+        removed_count = 0
+        for parent in root_elem.findall(".//*"):
+            folders_to_remove = []
+            for child in list(parent):
+                if child.tag == f"{{{KML_NS}}}Folder" or child.tag.endswith("Folder"):
+                    nt = child.find("kml:name", ns)
+                    if nt is not None and nt.text and nt.text.strip().lower() == "entity features":
+                        folders_to_remove.append(child)
+
+            for ef_folder in folders_to_remove:
+                for item in list(ef_folder):
+                    if not (item.tag == f"{{{KML_NS}}}name" or item.tag.endswith("name")):
+                        parent.append(item)
+                parent.remove(ef_folder)
+                removed_count += 1
+        return removed_count
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
