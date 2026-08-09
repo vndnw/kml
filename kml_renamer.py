@@ -40,6 +40,49 @@ FONT_MONO = "Cascadia Code"
 KML_NS    = "http://www.opengis.net/kml/2.2"
 APP_VER   = "2.0"
 
+KNOWN_NAMESPACES = {
+    "": "http://www.opengis.net/kml/2.2",
+    "kml": "http://www.opengis.net/kml/2.2",
+    "gx": "http://www.google.com/kml/ext/2.2",
+    "atom": "http://www.w3.org/2005/Atom",
+    "xsi": "http://www.w3.org/2001/XMLSchema-instance",
+    "xal": "urn:oasis:names:tc:ciq:xsdschema:xAL:2.0",
+}
+
+for prefix, uri in KNOWN_NAMESPACES.items():
+    ET.register_namespace(prefix, uri)
+
+
+def safe_parse_kml(filepath: str) -> ET.ElementTree:
+    """
+    Safely parse KML file. Automatically fixes unbound XML namespaces
+    (such as missing xmlns:xsi, xmlns:gx, etc.) if present.
+    """
+    try:
+        return ET.parse(filepath)
+    except Exception:
+        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+
+        for prefix, uri in KNOWN_NAMESPACES.items():
+            if not prefix:
+                continue
+            prefix_usage = f"{prefix}:"
+            xmlns_decl = f"xmlns:{prefix}="
+            if prefix_usage in content and xmlns_decl not in content:
+                idx = content.find("<kml")
+                if idx != -1:
+                    close_idx = content.find(">", idx)
+                    if close_idx != -1:
+                        content = (
+                            content[:close_idx]
+                            + f' xmlns:{prefix}="{uri}"'
+                            + content[close_idx:]
+                        )
+
+        root = ET.fromstring(content)
+        return ET.ElementTree(root)
+
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Custom Widgets
@@ -547,8 +590,7 @@ class KMLRenamerApp:
         self.clean_status_label.config(text="Đang xử lý làm sạch…")
 
         try:
-            ET.register_namespace("", KML_NS)
-            tree = ET.parse(input_file)
+            tree = safe_parse_kml(input_file)
             root = tree.getroot()
             ns = {"kml": KML_NS}
 
@@ -718,8 +760,7 @@ class KMLRenamerApp:
     # ──────────────────────────────────────────
     def _load_kml_folders(self, filepath: str):
         try:
-            ET.register_namespace("", KML_NS)
-            tree = ET.parse(filepath)
+            tree = safe_parse_kml(filepath)
             root = tree.getroot()
             ns = {"kml": KML_NS}
 
@@ -776,8 +817,7 @@ class KMLRenamerApp:
             target_name = self.folder_var.get()
             export_dir  = self.export_dir_var.get().strip() if do_export else None
 
-            ET.register_namespace("", KML_NS)
-            tree = ET.parse(input_file)
+            tree = safe_parse_kml(input_file)
             root = tree.getroot()
             ns = {"kml": KML_NS}
 
