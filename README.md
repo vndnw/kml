@@ -13,6 +13,7 @@
 - 📏 **Tự động tính diện tích (ha)**: Tự động tính diện tích tọa độ địa lý WGS84 cho từng polygon và gắn vào tên polygon / tên file (ví dụ: `XaYaMa17 - 3ha`, `Prefix1 - 4.5ha`).
 - ⚙️ **Nhận diện Folder tự động**: Tự đọc danh sách `<Folder>` trong KML và đề xuất Prefix theo tên thư mục (ví dụ: `ABCD` → `ABCD_Ca`).
 - 📤 **Xuất file KML riêng lẻ (Outline)**: Mỗi polygon có thể được xuất thành 1 file KML riêng biệt chỉ có nét vẽ (đỏ, độ dày 2px), không tô màu bên trong.
+- ⚡ **Tùy chọn chỉ xuất file riêng lẻ không đổi tên**: Cho phép giữ nguyên tên gốc của từng polygon và trích xuất hàng loạt file KML outline mà không thay đổi tên.
 - 🎨 **Giao diện thương mại (Light Theme)**:
   - Sidebar quy trình từng bước.
   - Form nhập liệu gọn gàng không cần cuộn trang.

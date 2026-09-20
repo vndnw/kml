@@ -142,6 +142,7 @@ class KMLRenamerApp:
         self.export_enabled        = tk.BooleanVar(value=False)
         self.export_dir_var        = tk.StringVar()
         self.add_area_var          = tk.BooleanVar(value=True)
+        self.export_only_var       = tk.BooleanVar(value=False)
         self.folder_list: list[str] = []
         self._log_count = 0
         self._current_step = 0
@@ -399,6 +400,22 @@ class KMLRenamerApp:
         self.export_dir_entry.pack(fill="x")
         SmallBtn(dir_row, text="  Chọn…  ", command=self._browse_export_dir).grid(row=0, column=1)
 
+        # Option: Export only, do not rename
+        opt_export_only_row = tk.Frame(self.export_frame, bg=C["bg_card"])
+        opt_export_only_row.pack(fill="x", pady=(8, 2))
+
+        cb_no_rename = tk.Checkbutton(
+            opt_export_only_row,
+            text="⚡  Chỉ xuất file riêng lẻ chứ không đổi tên (giữ nguyên tên gốc)",
+            variable=self.export_only_var,
+            command=self._on_toggle_export_only,
+            bg=C["bg_card"], fg=C["text"],
+            selectcolor=C["bg_input"], activebackground=C["bg_card"],
+            activeforeground=C["text"], font=(FONT, 9, "bold"),
+            cursor="hand2"
+        )
+        cb_no_rename.pack(side="left")
+
     def _on_toggle_export(self):
         if self.export_enabled.get():
             self.export_frame.pack(fill="x")
@@ -408,8 +425,30 @@ class KMLRenamerApp:
                 d = folder if folder and folder != "(Toàn bộ file)" else "polygon_export"
                 self.export_dir_var.set(os.path.join(parent_dir, d))
             self._set_step(2)
+            self._update_run_btn_text()
         else:
             self.export_frame.pack_forget()
+            self.export_only_var.set(False)
+            self._on_toggle_export_only()
+
+    def _on_toggle_export_only(self):
+        is_only = self.export_only_var.get()
+        if is_only:
+            self.prefix_entry.config(state="disabled")
+            self.output_entry.config(state="disabled")
+        else:
+            self.prefix_entry.config(state="normal")
+            self.output_entry.config(state="normal")
+        self._update_run_btn_text()
+
+    def _update_run_btn_text(self):
+        if hasattr(self, "run_btn"):
+            if self.export_only_var.get():
+                self.run_btn.config(text="  ▶  Xuất file KML riêng lẻ  ")
+            elif self.export_enabled.get():
+                self.run_btn.config(text="  ▶  Chạy đổi tên & Xuất file  ")
+            else:
+                self.run_btn.config(text="  ▶  Chạy đổi tên  ")
 
     # ──────────────────────────────────────────
     # Section: Action Bar
@@ -582,21 +621,28 @@ class KMLRenamerApp:
     # Core: Rename + Export
     # ──────────────────────────────────────────
     def _run_rename(self):
+        export_only = self.export_only_var.get()
+        do_export = self.export_enabled.get() or export_only
+
         if not self.input_path.get():
             messagebox.showwarning("Thiếu thông tin", "Vui lòng chọn file KML đầu vào.")
             return
-        if not self.prefix_var.get().strip():
-            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập prefix tên mới.")
-            return
-        if not self.output_path.get():
-            messagebox.showwarning("Thiếu thông tin", "Vui lòng chọn nơi lưu file đầu ra.")
-            return
 
-        do_export = self.export_enabled.get()
-        if do_export and not self.export_dir_var.get().strip():
-            messagebox.showwarning("Thiếu thông tin",
-                                   "Đã bật xuất file riêng lẻ nhưng chưa chọn thư mục.")
-            return
+        if export_only:
+            if not self.export_dir_var.get().strip():
+                messagebox.showwarning("Thiếu thông tin", "Vui lòng chọn thư mục xuất file riêng lẻ.")
+                return
+        else:
+            if not self.prefix_var.get().strip():
+                messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập prefix tên mới.")
+                return
+            if not self.output_path.get():
+                messagebox.showwarning("Thiếu thông tin", "Vui lòng chọn nơi lưu file đầu ra.")
+                return
+            if do_export and not self.export_dir_var.get().strip():
+                messagebox.showwarning("Thiếu thông tin",
+                                       "Đã bật xuất file riêng lẻ nhưng chưa chọn thư mục.")
+                return
 
         self._set_step(3)
         self.run_btn.set_enabled(False)
@@ -616,10 +662,14 @@ class KMLRenamerApp:
             ns = {"kml": KML_NS}
 
             self._log("━" * 44, "accent")
-            self._log(f"▶  Bắt đầu  |  Prefix: {prefix}", "accent")
+            if export_only:
+                self._log("▶  Bắt đầu xuất file KML riêng lẻ (Giữ nguyên tên gốc)", "accent")
+            else:
+                self._log(f"▶  Bắt đầu đổi tên & xuất  |  Prefix: {prefix}", "accent")
+
             if do_export:
                 os.makedirs(export_dir, exist_ok=True)
-                self._log(f"📤  Xuất file riêng → {export_dir}", "success")
+                self._log(f"📤  Thư mục xuất → {export_dir}", "success")
 
             search_root = root
             if target_name and target_name != "(Toàn bộ file)":
@@ -647,23 +697,31 @@ class KMLRenamerApp:
                 area_ha = self._get_placemark_area_ha(pm, ns) if add_area else 0.0
                 area_str = self._format_area_ha(area_ha) if add_area else ""
 
-                count += 1
-                base_name = f"{prefix}{count}"
-                if add_area and area_ha > 0:
-                    new_name = f"{base_name} - {area_str}"
+                if export_only:
+                    orig_name = (name_tag.text if (name_tag is not None and name_tag.text) else f"Polygon_{i+1}").strip()
+                    if add_area and area_ha > 0 and not orig_name.endswith("ha"):
+                        target_export_name = f"{orig_name} - {area_str}"
+                    else:
+                        target_export_name = orig_name
+                    self._log(f"  📤  {orig_name}  →  {target_export_name}.kml" + (f" ({area_ha:.2f} ha → {area_str})" if add_area else ""))
                 else:
-                    new_name = base_name
+                    count += 1
+                    base_name = f"{prefix}{count}"
+                    if add_area and area_ha > 0:
+                        new_name = f"{base_name} - {area_str}"
+                    else:
+                        new_name = base_name
 
-                if name_tag is not None:
-                    old = name_tag.text or "(không tên)"
-                    name_tag.text = new_name
-                else:
-                    old = "(không tên)"
-                    name_tag = ET.SubElement(pm, f"{{{KML_NS}}}name")
-                    name_tag.text = new_name
+                    if name_tag is not None:
+                        old = name_tag.text or "(không tên)"
+                        name_tag.text = new_name
+                    else:
+                        old = "(không tên)"
+                        name_tag = ET.SubElement(pm, f"{{{KML_NS}}}name")
+                        name_tag.text = new_name
 
-                self._log(f"  ✏️  {old}  →  {new_name}" + (f" ({area_ha:.2f} ha → {area_str})" if add_area else ""))
-                target_export_name = new_name
+                    self._log(f"  ✏️  {old}  →  {new_name}" + (f" ({area_ha:.2f} ha → {area_str})" if add_area else ""))
+                    target_export_name = new_name
 
                 if do_export:
                     # Sanitize filename for individual export
@@ -678,26 +736,34 @@ class KMLRenamerApp:
                     self._set_progress(pct)
                     self._set_status(f"Đang xử lý… {int(pct)}%")
 
-            tree.write(output_file, encoding="utf-8", xml_declaration=True)
+            if not export_only and output_file:
+                tree.write(output_file, encoding="utf-8", xml_declaration=True)
 
             self._log("━" * 44, "accent")
-            self._log(f"✅  Hoàn tất! Đã đổi tên toàn bộ {count} polygon", "success")
-            self._log(f"   File tổng hợp: {os.path.basename(output_file)}")
-            if do_export and exported:
-                self._log(f"   📤 Đã xuất tất cả {exported} file KML riêng lẻ → {os.path.basename(export_dir)}/", "success")
-
-            self._set_progress(100)
-            self._set_status(f"✅ Hoàn tất — {count} polygon đã đổi tên" +
-                             (f", {exported} file xuất" if exported else ""))
-
-            if count > 0 or exported > 0:
-                msg = f"Đã đổi tên toàn bộ {count} polygon thành công!\n({prefix}1 → {prefix}{count})\n\nFile tổng hợp: {output_file}"
-                if exported:
-                    msg += f"\n\nĐã xuất tất cả {exported} file KML riêng lẻ (Outline)\nvào: {export_dir}"
-                messagebox.showinfo("Thành công", msg)
+            if export_only:
+                self._log(f"✅  Hoàn tất! Đã xuất {exported} file KML riêng lẻ (giữ nguyên tên gốc)", "success")
+                self._log(f"   Thư mục: {os.path.basename(export_dir)}/")
+                self._set_progress(100)
+                self._set_status(f"✅ Hoàn tất — {exported} file KML riêng lẻ đã xuất")
+                messagebox.showinfo("Thành công", f"Đã xuất thành công {exported} file KML riêng lẻ (Outline)\nvào thư mục: {export_dir}")
             else:
-                messagebox.showinfo("Thông báo",
-                                    "Không tìm thấy polygon nào để xử lý.")
+                self._log(f"✅  Hoàn tất! Đã đổi tên toàn bộ {count} polygon", "success")
+                self._log(f"   File tổng hợp: {os.path.basename(output_file)}")
+                if do_export and exported:
+                    self._log(f"   📤 Đã xuất tất cả {exported} file KML riêng lẻ → {os.path.basename(export_dir)}/", "success")
+
+                self._set_progress(100)
+                self._set_status(f"✅ Hoàn tất — {count} polygon đã đổi tên" +
+                                 (f", {exported} file xuất" if exported else ""))
+
+                if count > 0 or exported > 0:
+                    msg = f"Đã đổi tên toàn bộ {count} polygon thành công!\n({prefix}1 → {prefix}{count})\n\nFile tổng hợp: {output_file}"
+                    if exported:
+                        msg += f"\n\nĐã xuất tất cả {exported} file KML riêng lẻ (Outline)\nvào: {export_dir}"
+                    messagebox.showinfo("Thành công", msg)
+                else:
+                    messagebox.showinfo("Thông báo",
+                                        "Không tìm thấy polygon nào để xử lý.")
         except Exception as e:
             self._log(f"❌  Lỗi: {e}", "error")
             self._set_status("❌ Lỗi xử lý")
