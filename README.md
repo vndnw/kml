@@ -1,6 +1,6 @@
 # 📐 KML Polygon Renamer & Exporter
 
-Ứng dụng Desktop GUI thương mại hỗ trợ đổi tên hàng loạt polygon (`Untitled Polygon`) trong file KML từ Google Earth và xuất thành các file KML riêng lẻ (Outline-only).
+Ứng dụng Desktop GUI thương mại hỗ trợ đổi tên hàng loạt toàn bộ polygon trong file KML từ Google Earth và xuất thành các file KML riêng lẻ (Outline-only).
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
 ![GUI](https://img.shields.io/badge/GUI-Tkinter-green.svg)
@@ -9,7 +9,7 @@
 
 ## 🌟 Tính năng chính
 
-- 📁 **Đổi tên hàng loạt**: Đổi tên tự động các polygon `Untitled Polygon` theo định dạng `PREFIX1`, `PREFIX2`, ...
+- 📁 **Đổi tên hàng loạt toàn bộ polygon**: Đổi tên tự động toàn bộ polygon trong thư mục được chọn theo định dạng `PREFIX1`, `PREFIX2`, ...
 - 📏 **Tự động tính diện tích (ha)**: Tự động tính diện tích tọa độ địa lý WGS84 cho từng polygon và gắn vào tên polygon / tên file (ví dụ: `XaYaMa17 - 3ha`, `Prefix1 - 4.5ha`).
 - ⚙️ **Nhận diện Folder tự động**: Tự đọc danh sách `<Folder>` trong KML và đề xuất Prefix theo tên thư mục (ví dụ: `ABCD` → `ABCD_Ca`).
 - 📤 **Xuất file KML riêng lẻ (Outline)**: Mỗi polygon có thể được xuất thành 1 file KML riêng biệt chỉ có nét vẽ (đỏ, độ dày 2px), không tô màu bên trong.

@@ -638,40 +638,32 @@ class KMLRenamerApp:
 
             add_area = self.add_area_var.get()
             count = 0
-            skipped = 0
             exported = 0
 
             for i, pm in enumerate(placemarks):
                 name_tag = pm.find("kml:name", ns)
-                is_untitled = name_tag is not None and (
-                    name_tag.text == "Untitled Polygon"
-                    or name_tag.text is None
-                    or name_tag.text.strip() == ""
-                )
 
                 # Calculate area
                 area_ha = self._get_placemark_area_ha(pm, ns) if add_area else 0.0
                 area_str = self._format_area_ha(area_ha) if add_area else ""
 
-                if is_untitled:
-                    count += 1
-                    base_name = f"{prefix}{count}"
-                    if add_area and area_ha > 0:
-                        new_name = f"{base_name} - {area_str}"
-                    else:
-                        new_name = base_name
+                count += 1
+                base_name = f"{prefix}{count}"
+                if add_area and area_ha > 0:
+                    new_name = f"{base_name} - {area_str}"
+                else:
+                    new_name = base_name
 
+                if name_tag is not None:
                     old = name_tag.text or "(không tên)"
                     name_tag.text = new_name
-                    self._log(f"  ✏️  {old}  →  {new_name}" + (f" ({area_ha:.2f} ha)" if add_area else ""))
-                    target_export_name = new_name
                 else:
-                    skipped += 1
-                    curr_name = name_tag.text.strip() if (name_tag is not None and name_tag.text) else f"Polygon_{i+1}"
-                    if add_area and area_ha > 0 and not curr_name.endswith("ha"):
-                        target_export_name = f"{curr_name} - {area_str}"
-                    else:
-                        target_export_name = curr_name
+                    old = "(không tên)"
+                    name_tag = ET.SubElement(pm, f"{{{KML_NS}}}name")
+                    name_tag.text = new_name
+
+                self._log(f"  ✏️  {old}  →  {new_name}" + (f" ({area_ha:.2f} ha)" if add_area else ""))
+                target_export_name = new_name
 
                 if do_export:
                     # Sanitize filename for individual export
@@ -689,17 +681,17 @@ class KMLRenamerApp:
             tree.write(output_file, encoding="utf-8", xml_declaration=True)
 
             self._log("━" * 44, "accent")
-            self._log(f"✅  Hoàn tất! Đổi tên {count} polygon (Bỏ qua: {skipped} đã có tên)", "success")
+            self._log(f"✅  Hoàn tất! Đã đổi tên toàn bộ {count} polygon", "success")
             self._log(f"   File tổng hợp: {os.path.basename(output_file)}")
             if do_export and exported:
                 self._log(f"   📤 Đã xuất tất cả {exported} file KML riêng lẻ → {os.path.basename(export_dir)}/", "success")
 
             self._set_progress(100)
-            self._set_status(f"✅ Hoàn tất — {count} đổi tên" +
+            self._set_status(f"✅ Hoàn tất — {count} polygon đã đổi tên" +
                              (f", {exported} file xuất" if exported else ""))
 
             if count > 0 or exported > 0:
-                msg = f"Đã đổi tên {count} polygon ('Untitled Polygon' → {prefix}1...)\n\nFile tổng hợp: {output_file}"
+                msg = f"Đã đổi tên toàn bộ {count} polygon thành công!\n({prefix}1 → {prefix}{count})\n\nFile tổng hợp: {output_file}"
                 if exported:
                     msg += f"\n\nĐã xuất tất cả {exported} file KML riêng lẻ (Outline)\nvào: {export_dir}"
                 messagebox.showinfo("Thành công", msg)
