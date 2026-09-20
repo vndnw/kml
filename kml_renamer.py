@@ -40,49 +40,6 @@ FONT_MONO = "Cascadia Code"
 KML_NS    = "http://www.opengis.net/kml/2.2"
 APP_VER   = "2.0"
 
-KNOWN_NAMESPACES = {
-    "": "http://www.opengis.net/kml/2.2",
-    "kml": "http://www.opengis.net/kml/2.2",
-    "gx": "http://www.google.com/kml/ext/2.2",
-    "atom": "http://www.w3.org/2005/Atom",
-    "xsi": "http://www.w3.org/2001/XMLSchema-instance",
-    "xal": "urn:oasis:names:tc:ciq:xsdschema:xAL:2.0",
-}
-
-for prefix, uri in KNOWN_NAMESPACES.items():
-    ET.register_namespace(prefix, uri)
-
-
-def safe_parse_kml(filepath: str) -> ET.ElementTree:
-    """
-    Safely parse KML file. Automatically fixes unbound XML namespaces
-    (such as missing xmlns:xsi, xmlns:gx, etc.) if present.
-    """
-    try:
-        return ET.parse(filepath)
-    except Exception:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
-
-        for prefix, uri in KNOWN_NAMESPACES.items():
-            if not prefix:
-                continue
-            prefix_usage = f"{prefix}:"
-            xmlns_decl = f"xmlns:{prefix}="
-            if prefix_usage in content and xmlns_decl not in content:
-                idx = content.find("<kml")
-                if idx != -1:
-                    close_idx = content.find(">", idx)
-                    if close_idx != -1:
-                        content = (
-                            content[:close_idx]
-                            + f' xmlns:{prefix}="{uri}"'
-                            + content[close_idx:]
-                        )
-
-        root = ET.fromstring(content)
-        return ET.ElementTree(root)
-
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Custom Widgets
@@ -183,8 +140,6 @@ class KMLRenamerApp:
         self.folder_var            = tk.StringVar()
         self.export_enabled        = tk.BooleanVar(value=False)
         self.export_dir_var        = tk.StringVar()
-        self.clean_input_path      = tk.StringVar()
-        self.clean_output_path     = tk.StringVar()
         self.folder_list: list[str] = []
         self._log_count = 0
         self._current_step = 0
@@ -292,39 +247,14 @@ class KMLRenamerApp:
         style = ttk.Style()
         style.theme_use("clam")
 
-        # Custom Notebook Style
-        style.configure("Custom.TNotebook", background=C["bg"], borderwidth=0)
-        style.configure("Custom.TNotebook.Tab", background=C["bg_input"], foreground=C["text_dim"],
-                        padding=(16, 7), font=(FONT, 10, "bold"), borderwidth=0)
-        style.map("Custom.TNotebook.Tab",
-                  background=[("selected", C["bg_card"])],
-                  foreground=[("selected", C["accent"])])
+        content = tk.Frame(parent, bg=C["bg"])
+        content.pack(side="left", fill="both", expand=True, padx=28, pady=16)
 
-        main_wrap = tk.Frame(parent, bg=C["bg"])
-        main_wrap.pack(side="left", fill="both", expand=True, padx=20, pady=12)
-
-        self.notebook = ttk.Notebook(main_wrap, style="Custom.TNotebook")
-        self.notebook.pack(fill="x", expand=False)
-
-        # Tab 1: Đổi tên & Xuất Polygon
-        tab1 = tk.Frame(self.notebook, bg=C["bg"])
-        self.notebook.add(tab1, text="  ✏️  Đổi tên & Xuất Polygon  ")
-
-        # Tab 2: Xóa thư mục Entity Features
-        tab2 = tk.Frame(self.notebook, bg=C["bg"])
-        self.notebook.add(tab2, text="  🧹  Xóa thư mục Entity Features  ")
-
-        # Build Tab 1
-        self._section_file(tab1)
-        self._section_rename(tab1)
-        self._section_export(tab1)
-        self._section_action(tab1)
-
-        # Build Tab 2
-        self._build_tab_clean(tab2)
-
-        # Shared Log Panel at bottom
-        self._section_log(main_wrap)
+        self._section_file(content)
+        self._section_rename(content)
+        self._section_export(content)
+        self._section_action(content)
+        self._section_log(content)
 
     # ──────────────────────────────────────────
     # Section: File Input
@@ -467,159 +397,6 @@ class KMLRenamerApp:
             self.export_frame.pack_forget()
 
     # ──────────────────────────────────────────
-    # Tab 2: Build Clean Entity Features UI
-    # ──────────────────────────────────────────
-    def _build_tab_clean(self, parent):
-        # Info Card
-        info_card = tk.Frame(parent, bg=C["bg_card"], padx=20, pady=12)
-        info_card.pack(fill="x", pady=(8, 8))
-        tk.Label(info_card,
-                 text="🧹  Tính năng này tự động xóa sạch tận gốc toàn bộ thư mục 'Entity Features' cùng tất cả phần tử con bên trong\n"
-                      "do Civil3D/AutoCAD tạo ra, giúp giải phóng dung lượng và tạo file KML chuẩn tối giản.",
-                 bg=C["bg_card"], fg=C["text_dim"], font=(FONT, 9), justify="left", anchor="w").pack(fill="x")
-
-        # Inputs Card
-        card = tk.Frame(parent, bg=C["bg_card"], padx=20, pady=14)
-        card.pack(fill="x", pady=(0, 8))
-
-        grid = tk.Frame(card, bg=C["bg_card"])
-        grid.pack(fill="x")
-        grid.columnconfigure(1, weight=1)
-
-        # Row 0: Input file
-        tk.Label(grid, text="File KML gốc", bg=C["bg_card"], fg=C["text_dim"],
-                 font=(FONT, 10), anchor="e").grid(row=0, column=0, sticky="e", padx=(0, 14), pady=4)
-
-        in_row = tk.Frame(grid, bg=C["bg_card"])
-        in_row.grid(row=0, column=1, sticky="ew", pady=4)
-        in_row.columnconfigure(0, weight=1)
-
-        inf = tk.Frame(in_row, bg=C["bg_input"], padx=12, pady=7)
-        inf.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        self.clean_input_entry = tk.Entry(inf, textvariable=self.clean_input_path,
-                                           bg=C["bg_input"], fg=C["text"], font=(FONT, 10),
-                                           insertbackground=C["text"], relief="flat", border=0)
-        self.clean_input_entry.pack(fill="x")
-        SmallBtn(in_row, text="  Chọn file…  ", command=self._browse_clean_input).grid(row=0, column=1)
-
-        # File info label
-        self.clean_info_label = tk.Label(card, text="", bg=C["bg_card"], fg=C["success"],
-                                          font=(FONT_MONO, 9), anchor="w")
-        self.clean_info_label.pack(fill="x", pady=(4, 6))
-
-        # Row 1: Output file
-        tk.Label(grid, text="File KML sạch", bg=C["bg_card"], fg=C["text_dim"],
-                 font=(FONT, 10), anchor="e").grid(row=1, column=0, sticky="e", padx=(0, 14), pady=4)
-
-        out_row = tk.Frame(grid, bg=C["bg_card"])
-        out_row.grid(row=1, column=1, sticky="ew", pady=4)
-        out_row.columnconfigure(0, weight=1)
-
-        ouf = tk.Frame(out_row, bg=C["bg_input"], padx=12, pady=7)
-        ouf.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        self.clean_output_entry = tk.Entry(ouf, textvariable=self.clean_output_path,
-                                            bg=C["bg_input"], fg=C["text"], font=(FONT, 10),
-                                            insertbackground=C["text"], relief="flat", border=0)
-        self.clean_output_entry.pack(fill="x")
-        SmallBtn(out_row, text="  Chọn…  ", command=self._browse_clean_output).grid(row=0, column=1)
-
-        # Action bar
-        bar = tk.Frame(parent, bg=C["bg"])
-        bar.pack(fill="x", pady=(4, 8))
-
-        self.clean_run_btn = PillButton(bar, text="  ▶  Loại bỏ 'Entity Features'  ",
-                                         command=self._run_clean_entity_features,
-                                         bg_color=C["accent"], hover_color=C["accent_glow"],
-                                         font_cfg=(FONT, 11, "bold"), padx=24, pady=10)
-        self.clean_run_btn.pack(side="left")
-
-        prog_col = tk.Frame(bar, bg=C["bg"])
-        prog_col.pack(side="left", fill="x", expand=True, padx=(20, 0))
-
-        self.clean_status_label = tk.Label(prog_col, text="Sẵn sàng", bg=C["bg"],
-                                            fg=C["text_muted"], font=(FONT, 9), anchor="w")
-        self.clean_status_label.pack(fill="x")
-
-        self.clean_prog_track = tk.Frame(prog_col, bg=C["bg_input"], height=4)
-        self.clean_prog_track.pack(fill="x", pady=(4, 0))
-        self.clean_prog_track.pack_propagate(False)
-        self.clean_prog_fill = tk.Frame(self.clean_prog_track, bg=C["accent"], height=4, width=0)
-        self.clean_prog_fill.place(x=0, y=0, relheight=1, relwidth=0)
-
-    def _set_clean_progress(self, pct: float):
-        self.clean_prog_fill.place(x=0, y=0, relheight=1, relwidth=pct / 100)
-        self.root.update_idletasks()
-
-    def _browse_clean_input(self):
-        path = filedialog.askopenfilename(
-            title="Chọn file KML cần làm sạch",
-            filetypes=[("KML Files", "*.kml"), ("All Files", "*.*")]
-        )
-        if path:
-            self.clean_input_path.set(path)
-            size = os.path.getsize(path) / 1024
-            self.clean_info_label.config(
-                text=f"✓  {os.path.basename(path)}  •  {size:.1f} KB",
-                fg=C["success"])
-            self._log(f"Tab 2: Đã chọn file: {os.path.basename(path)}", "info")
-
-            base, ext = os.path.splitext(path)
-            self.clean_output_path.set(f"{base}_NoEntityFeatures{ext}")
-
-    def _browse_clean_output(self):
-        path = filedialog.asksaveasfilename(
-            title="Lưu file KML sau khi làm sạch", defaultextension=".kml",
-            filetypes=[("KML Files", "*.kml"), ("All Files", "*.*")]
-        )
-        if path:
-            self.clean_output_path.set(path)
-
-    def _run_clean_entity_features(self):
-        input_file = self.clean_input_path.get()
-        output_file = self.clean_output_path.get()
-
-        if not input_file:
-            messagebox.showwarning("Thiếu thông tin", "Vui lòng chọn file KML đầu vào.")
-            return
-        if not output_file:
-            messagebox.showwarning("Thiếu thông tin", "Vui lòng chọn file KML đầu ra.")
-            return
-
-        self.clean_run_btn.set_enabled(False)
-        self._set_clean_progress(0)
-        self.clean_status_label.config(text="Đang xử lý làm sạch…")
-
-        try:
-            tree = safe_parse_kml(input_file)
-            root = tree.getroot()
-            ns = {"kml": KML_NS}
-
-            self._log("━" * 44, "accent")
-            self._log("▶  Bắt đầu làm sạch thư mục 'Entity Features'...", "accent")
-
-            removed_count = self._remove_entity_features(root, ns)
-            self._set_clean_progress(50)
-
-            tree.write(output_file, encoding="utf-8", xml_declaration=True)
-            self._set_clean_progress(100)
-
-            self._log(f"✅  Hoàn tất! Đã loại bỏ {removed_count} thư mục 'Entity Features'", "success")
-            self._log(f"   File KML sạch: {os.path.basename(output_file)}", "info")
-            self.clean_status_label.config(text=f"✅ Hoàn tất — Đã loại bỏ {removed_count} thư mục 'Entity Features'")
-
-            messagebox.showinfo(
-                "Thành công",
-                f"Đã loại bỏ {removed_count} thư mục 'Entity Features'!\n\n"
-                f"File KML sạch đã lưu tại:\n{output_file}"
-            )
-        except Exception as e:
-            self._log(f"❌  Lỗi làm sạch KML: {e}", "error")
-            self.clean_status_label.config(text="❌ Lỗi xử lý")
-            messagebox.showerror("Lỗi", str(e))
-        finally:
-            self.clean_run_btn.set_enabled(True)
-
-    # ──────────────────────────────────────────
     # Section: Action Bar
     # ──────────────────────────────────────────
     def _section_action(self, parent):
@@ -760,7 +537,8 @@ class KMLRenamerApp:
     # ──────────────────────────────────────────
     def _load_kml_folders(self, filepath: str):
         try:
-            tree = safe_parse_kml(filepath)
+            ET.register_namespace("", KML_NS)
+            tree = ET.parse(filepath)
             root = tree.getroot()
             ns = {"kml": KML_NS}
 
@@ -817,7 +595,8 @@ class KMLRenamerApp:
             target_name = self.folder_var.get()
             export_dir  = self.export_dir_var.get().strip() if do_export else None
 
-            tree = safe_parse_kml(input_file)
+            ET.register_namespace("", KML_NS)
+            tree = ET.parse(input_file)
             root = tree.getroot()
             ns = {"kml": KML_NS}
 
@@ -934,24 +713,7 @@ class KMLRenamerApp:
             os.path.join(output_dir, f"{name}.kml"),
             encoding="utf-8", xml_declaration=True)
 
-    def _remove_entity_features(self, root_elem, ns: dict):
-        """
-        Removes any <Folder> elements named 'Entity Features' (case insensitive).
-        Moves all children of 'Entity Features' directly up to the parent folder.
-        """
-        removed_count = 0
-        for parent in root_elem.findall(".//*"):
-            folders_to_remove = []
-            for child in list(parent):
-                if child.tag == f"{{{KML_NS}}}Folder" or child.tag.endswith("Folder"):
-                    nt = child.find("kml:name", ns)
-                    if nt is not None and nt.text and nt.text.strip().lower() == "entity features":
-                        folders_to_remove.append(child)
 
-            for ef_folder in folders_to_remove:
-                parent.remove(ef_folder)
-                removed_count += 1
-        return removed_count
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
