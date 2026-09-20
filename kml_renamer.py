@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 import os
 import copy
 import datetime
+import math
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Design Tokens
@@ -140,6 +141,7 @@ class KMLRenamerApp:
         self.folder_var            = tk.StringVar()
         self.export_enabled        = tk.BooleanVar(value=False)
         self.export_dir_var        = tk.StringVar()
+        self.add_area_var          = tk.BooleanVar(value=True)
         self.folder_list: list[str] = []
         self._log_count = 0
         self._current_step = 0
@@ -341,6 +343,19 @@ class KMLRenamerApp:
                                       insertbackground=C["text"], relief="flat", border=0)
         self.output_entry.pack(fill="x")
         SmallBtn(out_row, text="  Chọn…  ", command=self._browse_output).grid(row=0, column=1)
+
+        # Area option
+        opt_row = tk.Frame(grid, bg=C["bg_card"])
+        opt_row.grid(row=3, column=1, sticky="w", pady=(6, 2))
+
+        cb_area = tk.Checkbutton(
+            opt_row, text="📏  Kèm diện tích vào tên (VD: XaYaMa17 - 3ha)",
+            variable=self.add_area_var, bg=C["bg_card"], fg=C["text"],
+            selectcolor=C["bg_input"], activebackground=C["bg_card"],
+            activeforeground=C["text"], font=(FONT, 9, "bold"),
+            cursor="hand2"
+        )
+        cb_area.pack(side="left")
 
     # ──────────────────────────────────────────
     # Section: Export Options
@@ -621,6 +636,7 @@ class KMLRenamerApp:
             total = len(placemarks)
             self._log(f"Tổng Placemark: {total}")
 
+            add_area = self.add_area_var.get()
             count = 0
             skipped = 0
             exported = 0
@@ -633,16 +649,29 @@ class KMLRenamerApp:
                     or name_tag.text.strip() == ""
                 )
 
+                # Calculate area
+                area_ha = self._get_placemark_area_ha(pm, ns) if add_area else 0.0
+                area_str = self._format_area_ha(area_ha) if add_area else ""
+
                 if is_untitled:
                     count += 1
-                    new_name = f"{prefix}{count}"
+                    base_name = f"{prefix}{count}"
+                    if add_area and area_ha > 0:
+                        new_name = f"{base_name} - {area_str}"
+                    else:
+                        new_name = base_name
+
                     old = name_tag.text or "(không tên)"
                     name_tag.text = new_name
-                    self._log(f"  ✏️  {old}  →  {new_name}")
+                    self._log(f"  ✏️  {old}  →  {new_name}" + (f" ({area_ha:.2f} ha)" if add_area else ""))
                     target_export_name = new_name
                 else:
                     skipped += 1
-                    target_export_name = name_tag.text.strip() if (name_tag is not None and name_tag.text) else f"Polygon_{i+1}"
+                    curr_name = name_tag.text.strip() if (name_tag is not None and name_tag.text) else f"Polygon_{i+1}"
+                    if add_area and area_ha > 0 and not curr_name.endswith("ha"):
+                        target_export_name = f"{curr_name} - {area_str}"
+                    else:
+                        target_export_name = curr_name
 
                 if do_export:
                     # Sanitize filename for individual export
@@ -685,10 +714,115 @@ class KMLRenamerApp:
             self.run_btn.set_enabled(True)
 
     # ──────────────────────────────────────────
+    # Geometry & Area Calculation (WGS84)
+    # ──────────────────────────────────────────
+    @staticmethod
+    def _parse_kml_coordinates(coord_text: str):
+        coords = []
+        if not coord_text:
+            return coords
+        for t in coord_text.strip().split():
+            parts = t.split(",")
+            if len(parts) >= 2:
+                try:
+                    lon = float(parts[0].strip())
+                    lat = float(parts[1].strip())
+                    coords.append((lon, lat))
+                except ValueError:
+                    continue
+        return coords
+
+    @staticmethod
+    def _calculate_ring_area(coords):
+        """Calculates area of spherical polygon ring in square meters using WGS84 ellipsoid mean radius."""
+        if len(coords) < 3:
+            return 0.0
+        R = 6378137.0  # Earth radius in meters
+        total = 0.0
+        rad = math.pi / 180.0
+        n = len(coords)
+        for i in range(n):
+            lon1, lat1 = coords[i]
+            lon2, lat2 = coords[(i + 1) % n]
+            d_lon = (lon2 - lon1) * rad
+            if d_lon > math.pi:
+                d_lon -= 2 * math.pi
+            elif d_lon < -math.pi:
+                d_lon += 2 * math.pi
+            total += d_lon * (math.sin(lat1 * rad) + math.sin(lat2 * rad))
+        return abs(total) * (R * R) / 2.0
+
+    def _get_placemark_area_ha(self, placemark, ns: dict) -> float:
+        """Returns total area in hectares for a placemark."""
+        total_area_m2 = 0.0
+        polygons = placemark.findall(".//kml:Polygon", ns)
+        if not polygons:
+            polygons = [elem for elem in placemark.iter() if elem.tag.endswith("Polygon")]
+
+        for poly in polygons:
+            outer_elem = poly.find(".//kml:outerBoundaryIs//kml:coordinates", ns)
+            if outer_elem is None:
+                for elem in poly.iter():
+                    if elem.tag.endswith("outerBoundaryIs"):
+                        for c in elem.iter():
+                            if c.tag.endswith("coordinates"):
+                                outer_elem = c
+                                break
+            if outer_elem is not None and outer_elem.text:
+                outer_coords = self._parse_kml_coordinates(outer_elem.text)
+                poly_area = self._calculate_ring_area(outer_coords)
+
+                # Subtract inner boundary holes
+                inner_rings = poly.findall(".//kml:innerBoundaryIs//kml:coordinates", ns)
+                if not inner_rings:
+                    for elem in poly.iter():
+                        if elem.tag.endswith("innerBoundaryIs"):
+                            for c in elem.iter():
+                                if c.tag.endswith("coordinates"):
+                                    inner_rings.append(c)
+                for inner_elem in inner_rings:
+                    if inner_elem.text:
+                        inner_coords = self._parse_kml_coordinates(inner_elem.text)
+                        poly_area -= self._calculate_ring_area(inner_coords)
+
+                total_area_m2 += max(0.0, poly_area)
+
+        # Fallback to direct LinearRing if no Polygon element
+        if total_area_m2 == 0.0 and not polygons:
+            rings = placemark.findall(".//kml:LinearRing//kml:coordinates", ns)
+            if not rings:
+                rings = [elem for elem in placemark.iter() if elem.tag.endswith("coordinates")]
+            for ring_elem in rings:
+                if ring_elem.text:
+                    coords = self._parse_kml_coordinates(ring_elem.text)
+                    if len(coords) >= 3:
+                        total_area_m2 += self._calculate_ring_area(coords)
+
+        return total_area_m2 / 10000.0
+
+    @staticmethod
+    def _format_area_ha(area_ha: float) -> str:
+        """Format area in hectares: 3.0 -> '3ha', 3.2 -> '3.2ha', 0.45 -> '0.45ha'"""
+        if area_ha <= 0:
+            return "0ha"
+        rounded_int = round(area_ha)
+        if abs(area_ha - rounded_int) < 0.01:
+            return f"{rounded_int}ha"
+        s = f"{area_ha:.2f}".rstrip("0").rstrip(".")
+        return f"{s}ha"
+
+    # ──────────────────────────────────────────
     # Export: Single polygon → KML (outline only)
     # ──────────────────────────────────────────
     def _export_single(self, placemark, name: str, output_dir: str):
         pm_copy = copy.deepcopy(placemark)
+
+        # Sync placemark internal name with the target name
+        pm_name = pm_copy.find(f"{{{KML_NS}}}name")
+        if pm_name is not None:
+            pm_name.text = name
+        else:
+            ET.SubElement(pm_copy, f"{{{KML_NS}}}name").text = name
 
         su = pm_copy.find(f"{{{KML_NS}}}styleUrl")
         if su is not None:

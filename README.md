@@ -10,6 +10,7 @@
 ## 🌟 Tính năng chính
 
 - 📁 **Đổi tên hàng loạt**: Đổi tên tự động các polygon `Untitled Polygon` theo định dạng `PREFIX1`, `PREFIX2`, ...
+- 📏 **Tự động tính diện tích (ha)**: Tự động tính diện tích tọa độ địa lý WGS84 cho từng polygon và gắn vào tên polygon / tên file (ví dụ: `XaYaMa17 - 3ha`, `Prefix1 - 4.5ha`).
 - ⚙️ **Nhận diện Folder tự động**: Tự đọc danh sách `<Folder>` trong KML và đề xuất Prefix theo tên thư mục (ví dụ: `ABCD` → `ABCD_Ca`).
 - 📤 **Xuất file KML riêng lẻ (Outline)**: Mỗi polygon có thể được xuất thành 1 file KML riêng biệt chỉ có nét vẽ (đỏ, độ dày 2px), không tô màu bên trong.
 - 🎨 **Giao diện thương mại (Light Theme)**:
