@@ -662,7 +662,7 @@ class KMLRenamerApp:
                     name_tag = ET.SubElement(pm, f"{{{KML_NS}}}name")
                     name_tag.text = new_name
 
-                self._log(f"  ✏️  {old}  →  {new_name}" + (f" ({area_ha:.2f} ha)" if add_area else ""))
+                self._log(f"  ✏️  {old}  →  {new_name}" + (f" ({area_ha:.2f} ha → {area_str})" if add_area else ""))
                 target_export_name = new_name
 
                 if do_export:
@@ -794,14 +794,13 @@ class KMLRenamerApp:
 
     @staticmethod
     def _format_area_ha(area_ha: float) -> str:
-        """Format area in hectares: 3.0 -> '3ha', 3.2 -> '3.2ha', 0.45 -> '0.45ha'"""
+        """Format area in whole rounded hectares (e.g. 12.23ha -> '12ha', 3.4ha -> '3ha')."""
         if area_ha <= 0:
             return "0ha"
-        rounded_int = round(area_ha)
-        if abs(area_ha - rounded_int) < 0.01:
-            return f"{rounded_int}ha"
-        s = f"{area_ha:.2f}".rstrip("0").rstrip(".")
-        return f"{s}ha"
+        rounded = round(area_ha)
+        if rounded == 0 and area_ha > 0:
+            rounded = 1
+        return f"{rounded}ha"
 
     # ──────────────────────────────────────────
     # Export: Single polygon → KML (outline only)
